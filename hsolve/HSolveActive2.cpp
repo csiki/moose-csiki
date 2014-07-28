@@ -140,7 +140,7 @@ void HSolveActive::updateMatrix() // TODO is it ready?
     }
     // TODO where to store B ??? the last col of the HS_
     
-    // build and stuff
+    // build sparse matrix operations for inversion
     vector< double > passiveDiagVal;
     vector< Triplet<double> > passiveOps;
     vector< unsigned int > diag, lookupOldRowFromNew;
