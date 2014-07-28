@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 #  Build folder 
 .svn
 buildMooseUsingCmake
@@ -10,6 +11,8 @@ tags
 *.pdf
 *.bak
 
+=======
+>>>>>>> 0b58fc7058ddc9633aebd69b9b72ca7c8ef7563f
 # Compiled Object files
 *.slo
 *.lo
@@ -31,6 +34,7 @@ tags
 *.exe
 *.out
 *.app
+<<<<<<< HEAD
 
 # Object files
 *.o
@@ -123,3 +127,5 @@ Session.vim
 .netrwhist
 *~
 
+=======
+>>>>>>> 0b58fc7058ddc9633aebd69b9b72ca7c8ef7563f
