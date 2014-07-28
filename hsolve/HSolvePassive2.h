@@ -72,8 +72,8 @@ protected:
      * FastMxElim attributes TODO
     */
     FastMatrixElim passiveElim_;
-    vector< Triplet<double> > passiveOps_;
-    vector< double > passiveDiagVal_;
+    //~ vector< Triplet<double> > passiveOps_; // TODO are these needed as class attribute ?
+    //~ vector< double > passiveDiagVal_;
     
     /**
      * Attributes from HinesMatrix. TODO !!!

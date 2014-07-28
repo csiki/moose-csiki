@@ -18,13 +18,10 @@ void HSolvePassive::setup( Id seed, double dt )
     storeTree();
     prepareSparseMatrix();
     
-    // setup FastMxElim TODO
-    vector< unsigned int > diag(nCompt_, 0);
-    passiveElim_.buildForwardElim(diag, passiveOps_); // TODO is this necessary here?
-    passiveElim_.buildBackwardSub(diag, passiveOps_, passiveDiagVal_);
-    
-    // TODO HinesMatrix::setup( tree_, dt_ ); part !
-    
+    //~ vector< unsigned int > diag(nCompt_, 0);
+    //~ passiveElim_.buildForwardElim(diag, passiveOps_); // TODO can be built once?
+    //~ passiveElim_.buildBackwardSub(diag, passiveOps_, passiveDiagVal_);
+        
     //~ passiveElim_.opsReorder( lookupOldRowsFromNew, fops, diagVal ); // TODO needed?
     // pl.:
     //~ vector< unsigned int > parentVoxel = m->getParentVoxel();
@@ -233,7 +230,6 @@ void HSolvePassive::prepareSparseMatrix()
     diagvals_.resize(nCompt_, .0);
     for ( unsigned int i = 0; i < nCompt_; ++i )
         diagvals_[i] = tree_[ i ].Cm / ( dt_ / 2.0 ) + 1.0 / tree_[ i ].Rm;
-        //~ passiveElim_.set(i, i, tree_[ i ].Cm / ( dt_ / 2.0 ) + 1.0 / tree_[ i ].Rm);
     
     /// calc off diagonal values
     // axial conductance
@@ -291,10 +287,6 @@ void HSolvePassive::prepareSparseMatrix()
             }
         }
     }
-    //~ // store Gij values into sparse matrix // TODO inside updateMx
-    //~ for (jIt = junctions_.begin(); jIt != junctions_.end(); ++jIt)
-        //~ passiveElim_.set(jIt->first.first, jIt->first.second, jIt->second);
-    
     // TODO not sure if that's enough considering the axial conductances
     // or at least the const values that only needed calc once
 }

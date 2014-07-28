@@ -53,9 +53,8 @@ void HSolveActive::step( ProcPtr info )
     calculateChannelCurrents();
     updateMatrix();
     
-    // TODO FastMxElim calculations
-    // TODO is build needed?
-    FastMatrixElim::advance(V_, passiveOps_, passiveDiagVal_);
+    // TODO FastMatrixElim calc
+    FastMatrixElim::advance(V_, passiveOps_, passiveDiagVal_); // TODO assuming V_ is y
     
     advanceCalcium();
     advanceSynChans( info );
@@ -140,6 +139,15 @@ void HSolveActive::updateMatrix() // TODO is it ready?
         passiveElim_.set(jIt->first.second, jIt->first.first, jIt->second);
     }
     // TODO where to store B ??? the last col of the HS_
+    
+    // build and stuff
+    vector< double > passiveDiagVal;
+    vector< Triplet<double> > passiveOps;
+    vector< unsigned int > diag, lookupOldRowFromNew;
+    passiveElim_.hinesReorder(B, lookupOldRowFromNew); // TODO assuming B is the parentVoxel
+    passiveElim_.buildForwardElim(diag, passiveOps); // TODO can be built once in setup? or is it needed here
+    passiveElim_.buildBackwardSub(diag, passiveOps, passiveDiagVal);
+    passiveElim_.opsReorder(lookupOldRowsFromNew, passiveOps, passiveDiagVal);
 }
 
 void HSolveActive::advanceCalcium()
