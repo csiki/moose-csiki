@@ -11,34 +11,22 @@
 
 void HSolvePassive::setup( Id seed, double dt )
 {
+    cout << "#1";
     clear();
     dt_ = dt;
     walkTree( seed );
+    cout << "#2";
     initialize();
+    cout << "#3";
     storeTree();
+    cout << "#4";
     prepareSparseMatrix();
-    
-    //~ vector< unsigned int > diag(nCompt_, 0);
-    //~ passiveElim_.buildForwardElim(diag, passiveOps_); // TODO can be built once?
-    //~ passiveElim_.buildBackwardSub(diag, passiveOps_, passiveDiagVal_);
-        
-    //~ passiveElim_.opsReorder( lookupOldRowsFromNew, fops, diagVal ); // TODO needed?
-    // pl.:
-    //~ vector< unsigned int > parentVoxel = m->getParentVoxel();
-	//~ assert( elim.checkSymmetricShape() );
-    //~ vector< unsigned int > lookupOldRowsFromNew;
-    //~ elim.hinesReorder( parentVoxel, lookupOldRowsFromNew );
-    //~ assert( elim.checkSymmetricShape() );
-    //~ pools_[i].setNumVoxels( numVoxels_ );
-    //~ elim.buildForwardElim( diagIndex, fops );
-    //~ elim.buildBackwardSub( diagIndex, fops, diagVal );
-    //~ elim.opsReorder( lookupOldRowsFromNew, fops, diagVal );
+    cout << "#5";
 }
 
 void HSolvePassive::solve()
 {
     updateMatrix();
-    // TODO is build needed?
     FastMatrixElim::advance(V_, passiveOps_, passiveDiagVal_);
 }
 
@@ -55,6 +43,7 @@ void HSolvePassive::clear()
     tree_.clear();
     inject_.clear();
     junctions_.clear();
+    diagvals_.clear();
 }
 
 void HSolvePassive::walkTree( Id seed )
@@ -241,54 +230,43 @@ void HSolvePassive::prepareSparseMatrix()
     // fill junctions_ --> key is a pair of hines indexes of connected
     // compartments; the value is the Gij = Gi * Gj / Gsum; Gsum is the 
     // summed value of conductances of every compartment in the given junction.
+    vector< unsigned int > parent(nCompt_, 0);
     for (unsigned int cIndex = 0; cIndex < nCompt_; ++cIndex)
     {
-        for (set< unsigned int >::iterator childIt = tree_[cIndex].children.begin();
-            childIt != tree_[cIndex].children.end(); ++childIt)
+        // parent->children are saved in junctions_
+        if (!tree_[cIndex].children.empty())
         {
-            if (cIndex < *childIt) // kill redundancy
-                junctions_.insert(make_pair(
-                    pair< unsigned int, unsigned int >(cIndex, *childIt), .0));
-        }
-    }
-    // calculate the Gsum values
-    // check the connected compartments of two connected compartment,
-    // if intersection is found, it is a junction with >2 compartments
-    map< pair< unsigned int, unsigned int >, double >::iterator jIt;
-    for (jIt = junctions_.begin(); jIt != junctions_.end(); ++jIt)
-    {
-        unsigned int comp1 = jIt->first.first;
-        unsigned int comp2 = jIt->first.second;
-        // check corresponding junction only when Gsum is not set already,
-        // which would mean the junction is already found
-        if (jIt->second != 0.0)
-        {
-            set< unsigned int > common;
-            set_intersection(
-                tree_[comp1].children.begin(), tree_[comp1].children.end(),
-                tree_[comp2].children.begin(), tree_[comp2].children.end(),
-                std::inserter(common, common.begin()));
-            common.insert(comp1); // by default common
-            common.insert(comp2); // by default common
-            // now common includes all compartments of a junction
-            set< unsigned int >::iterator cIt1;
-            set< unsigned int >::iterator cIt2;
-            // calc Gsum which is common for all of their 1-to-1 connections
-            double Gsum = .0;
-            for (cIt1 = common.begin(); cIt1 != common.end(); ++cIt1)
-                Gsum += Ga[*cIt1]; // sum axial conductance
-            // it's time to fill up the Gij values
-            for (cIt1 = common.begin(); cIt1 != common.end(); ++cIt1)
+            // calculate Gsum
+            double Gsum = Ga[cIndex];
+            set< unsigned int >::iterator childIt;
+            for (childIt = tree_[cIndex].children.begin();
+                childIt != tree_[cIndex].children.end(); ++childIt)
+                Gsum += Ga[*childIt];
+            // fill junctions_ and parent vector
+            for (childIt = tree_[cIndex].children.begin();
+                childIt != tree_[cIndex].children.end(); ++childIt)
             {
-                cIt2 = cIt1; advance(cIt2, 1);
-                for (; cIt2 != common.end(); ++cIt2)
-                    junctions_[make_pair(*cIt1, *cIt2)] =
-                        Ga[*cIt1] * Ga[*cIt2] / Gsum;
+                junctions_.insert( make_pair(
+                    pair< unsigned int, unsigned int >(cIndex, *childIt),
+                    Ga[cIndex] * Ga[*childIt] / Gsum) );
+                // calc parent vector indexed by the child's Hines number,
+                // contains the Hines number of the parent
+                parent[*childIt] = cIndex;
             }
         }
     }
+    
+    // building Gauss elimination operations
+    vector< unsigned int > diag, lookupOldRowFromNew;
+    passiveElim_.setSize(nCompt_, nCompt_);
+    passiveElim_.hinesReorder(parent, lookupOldRowFromNew);
+    passiveElim_.buildForwardElim(diag, passiveOps_);
+    passiveElim_.buildBackwardSub(diag, passiveOps_, passiveDiagVal_);
+    passiveElim_.opsReorder(lookupOldRowFromNew, passiveOps_, passiveDiagVal_);
+    
     // TODO not sure if that's enough considering the axial conductances
     // or at least the const values that only needed calc once
+    
 }
 
 

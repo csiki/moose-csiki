@@ -53,8 +53,8 @@ void HSolveActive::step( ProcPtr info )
     calculateChannelCurrents();
     updateMatrix();
     
-    // TODO FastMatrixElim calc
-    FastMatrixElim::advance(V_, passiveOps_, passiveDiagVal_); // TODO assuming V_ is y
+    // FastMatrixElim calculation
+    FastMatrixElim::advance(V_, passiveOps_, passiveDiagVal_);
     
     advanceCalcium();
     advanceSynChans( info );
@@ -82,11 +82,8 @@ void HSolveActive::calculateChannelCurrents()
     }
 }
 
-void HSolveActive::updateMatrix() // TODO is it ready?
+void HSolveActive::updateMatrix()
 {
-    // resize passiveElim_ // TODO is it needed at every update?
-    passiveElim_.setSize(nCompt_, nCompt_); // TODO nCompt_ + 1 cols ???
-    
     // copy diagonal and off-diagonal values to be able to alter them
     vector< double > diagvalsCopy = diagvals_;
     map< pair< unsigned int, unsigned int >, double > junctionsCopy = junctions_;
@@ -132,22 +129,13 @@ void HSolveActive::updateMatrix() // TODO is it ready?
         passiveElim_.set(i, i, diagvalsCopy[i]);
     // store Gij off-diagonal values into sparse matrix
     map< pair< unsigned int, unsigned int >, double >::iterator jIt;
-    for (jIt = junctions_.begin(); jIt != junctions_.end(); ++jIt)
+    for (jIt = junctions_.begin(); jIt != junctions_.end(); ++jIt) // TODO is it needed to be set at every step? and if yes, is the build necessary at every step too?
     {
-        // TODO is it needed to add both?
+        cout << jIt->first.first << "," << jIt->first.second << ", " << jIt->second << endl;
         passiveElim_.set(jIt->first.first, jIt->first.second, jIt->second);
         passiveElim_.set(jIt->first.second, jIt->first.first, jIt->second);
     }
     // TODO where to store B ??? the last col of the HS_
-    
-    // build sparse matrix operations for inversion
-    vector< double > passiveDiagVal;
-    vector< Triplet<double> > passiveOps;
-    vector< unsigned int > diag, lookupOldRowFromNew;
-    passiveElim_.hinesReorder(B, lookupOldRowFromNew); // TODO assuming B is the parentVoxel
-    passiveElim_.buildForwardElim(diag, passiveOps); // TODO can be built once in setup? or is it needed here
-    passiveElim_.buildBackwardSub(diag, passiveOps, passiveDiagVal);
-    passiveElim_.opsReorder(lookupOldRowsFromNew, passiveOps, passiveDiagVal);
 }
 
 void HSolveActive::advanceCalcium()

@@ -46,10 +46,6 @@ public:
 protected:
 	// Integration
 	void updateMatrix();
-	
-    /**
-     * Own stuff TODO
-    */
     
     /**
      * Diagonal values of the Hines matrix. Needed to be saved separately
@@ -69,11 +65,11 @@ protected:
     map< pair< unsigned int, unsigned int >, double > junctions_;
     
     /**
-     * FastMxElim attributes TODO
+     * FastMatrixElim attributes
     */
-    FastMatrixElim passiveElim_;
-    //~ vector< Triplet<double> > passiveOps_; // TODO are these needed as class attribute ?
-    //~ vector< double > passiveDiagVal_;
+    FastMatrixElim passiveElim_; // TODO is this needed?
+    vector< Triplet<double> > passiveOps_;
+    vector< double > passiveDiagVal_;
     
     /**
      * Attributes from HinesMatrix. TODO !!!

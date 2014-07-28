@@ -78,7 +78,7 @@ class TestHSolveEETCR(SingleCellCurrentStepTest):
     """Run HSolve and Exponential solver simulation of the same cell."""
     celltype = 'TCR'
     def testHSolve(self):
-        ProfStart("hsolve.prof")
+        ProfStart("hsolve2.prof")
         self.schedule(simdt, plotdt, 'hsolve')
         self.runsim(simtime, pulsearray=pulsearray)
         self.savedata()
