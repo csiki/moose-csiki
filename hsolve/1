@@ -1,0 +1,3 @@
+g++   -I. -I../basecode -I../msg HSolveStruct.cpp -c
+g++   -I. -I../basecode -I../msg RateLookup.cpp -c
+g++   -I. -I../basecode -I../msg HSolvePassive2.cpp -c
