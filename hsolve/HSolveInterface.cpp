@@ -9,7 +9,6 @@
 
 #include "header.h"
 #include "HSolveStruct.h"
-#include "HinesMatrix.h"
 #include "HSolvePassive.h"
 #include "RateLookup.h"
 #include "HSolveActive.h"

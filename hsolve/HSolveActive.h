@@ -20,7 +20,7 @@
 #include "../biophysics/SpikeGen.h"
 #include "HSolveUtils.h"
 #include "HSolveStruct.h"
-#include "HSolvePassive2.h"
+#include "HSolvePassive.h"
 #include "RateLookup.h"
 #include "../basecode/SparseMatrix.h"
 #include "../diffusion/FastMatrixElim.h"

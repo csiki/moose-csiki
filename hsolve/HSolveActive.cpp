@@ -10,7 +10,7 @@
 #include "header.h"
 #include <queue>
 #include "HSolveStruct.h"
-#include "HSolvePassive2.h"
+#include "HSolvePassive.h"
 #include "RateLookup.h"
 #include "HSolveActive.h"
 #include "HSolve.h"
@@ -53,7 +53,7 @@ void HSolveActive::step( ProcPtr info )
     calculateChannelCurrents();
     updateMatrix();
     
-    // TODO FastMxElim calculations
+    // FastMatrixElim calculation
     FastMatrixElim::advance(V_, passiveOps_, passiveDiagVal_);
     
     advanceCalcium();
@@ -84,63 +84,60 @@ void HSolveActive::calculateChannelCurrents()
 
 void HSolveActive::updateMatrix()
 {
+    // copy diagonal and off-diagonal values to be able to alter them
+    vector< double > diagvalsCopy = diagvals_;
+    map< pair< unsigned int, unsigned int >, double > junctionsCopy = junctions_;
+    vector< double > B(nCompt_, .0); // TODO FIXME how is it called ???
     
-    // TODO rewrite for SparseMx
+    // add GkSum and GkEkSum, fill externalCurrent vector
+    // TODO not sure if this needed
+    //~ vector< CurrentStruct >::iterator icurrent = current_.begin();
+    //~ vector< currentVecIter >::iterator iboundary = currentBoundary_.begin();
+    //~ for (unsigned int i = 0; i < nCompt_; ++i)
+    //~ {
+        //~ double GkSum = .0, GkEkSum = .0;
+        //~ for (; icurrent < *iboundary; ++icurrent)
+        //~ {
+            //~ GkSum   += icurrent->Gk;
+            //~ GkEkSum += icurrent->Gk * icurrent->Ek;
+        //~ }
+        //~ 
+        //~ diagvalsCopy[i] += GkSum;
+        //~ B[i] = V_[i] * compartment_[i].CmByDt * compartment_[i].EmByRm + GkEkSum;
+        //~ 
+        //~ ++iboundary;
+    //~ }
     
+    // current injections from inject_
+    // TODO not sure if this needed
+    //~ map< unsigned int, InjectStruct >::iterator inject;
+    //~ for (inject = inject_.begin(); inject != inject_.end(); ++inject)
+    //~ {
+        //~ B[inject->first] +=
+            //~ inject->second.injectVarying + inject->second.injectBasal;
+    //~ 
+        //~ inject->second.injectVarying = 0.0;
+    //~ }
     
-    /*
-     * Copy contents of HJCopy_ into HJ_. Cannot do a vector assign() because
-     * iterators to HJ_ get invalidated in MS VC++
-     */
-     
-    if ( HJ_.size() != 0 )
-        memcpy( &HJ_[ 0 ], &HJCopy_[ 0 ], sizeof( double ) * HJ_.size() );
-
-    double GkSum, GkEkSum;
-    vector< CurrentStruct >::iterator icurrent = current_.begin();
-    vector< currentVecIter >::iterator iboundary = currentBoundary_.begin();
-    vector< double >::iterator ihs = HS_.begin();
-    vector< double >::iterator iv = V_.begin();
-
-    vector< CompartmentStruct >::iterator ic;
-    for ( ic = compartment_.begin(); ic != compartment_.end(); ++ic )
-    {
-        GkSum   = 0.0;
-        GkEkSum = 0.0;
-        for ( ; icurrent < *iboundary; ++icurrent )
-        {
-            GkSum   += icurrent->Gk;
-            GkEkSum += icurrent->Gk * icurrent->Ek;
-        }
-
-        *ihs = *( 2 + ihs ) + GkSum;
-        *( 3 + ihs ) = *iv * ic->CmByDt + ic->EmByRm + GkEkSum;
-
-        ++iboundary, ihs += 4, ++iv;
-    }
-
-    map< unsigned int, InjectStruct >::iterator inject;
-    for ( inject = inject_.begin(); inject != inject_.end(); ++inject )
-    {
-        unsigned int ic = inject->first;
-        InjectStruct& value = inject->second;
-
-        HS_[ 4 * ic + 3 ] += value.injectVarying + value.injectBasal;
-
-        value.injectVarying = 0.0;
-    }
-
-    ihs = HS_.begin();
-    vector< double >::iterator iec;
-    for ( iec = externalCurrent_.begin(); iec != externalCurrent_.end(); iec += 2 )
-    {
-        *ihs += *iec;
-        *( 3 + ihs ) += *( iec + 1 );
-
-        ihs += 4;
-    }
-
-    stage_ = 0;    // Update done.
+    // current injections from external sources not included in Hines solver
+    // TODO not sure if this needed
+    //~ for (unsigned int i = 0; i < nCompt_; ++i)
+    //~ {
+        //~ diagvalsCopy[i] += externalCurrent_[2 * i];
+        //~ B[i] += externalCurrent_[2 * i + 1];
+    //~ }
+    
+    //~ // update diagonal values of sparse matrix
+    //~ for (unsigned int i = 0; i < nCompt_; ++i)
+        //~ passiveElim_.set(i, i, diagvalsCopy[i]);
+    //~ // store Gij off-diagonal values into sparse matrix
+    //~ map< pair< unsigned int, unsigned int >, double >::iterator jIt;
+    //~ for (jIt = junctions_.begin(); jIt != junctions_.end(); ++jIt) // TODO is it needed to be set at every step? and if yes, is the build necessary at every step too?
+    //~ {
+        //~ passivexElim_.set(jIt->first.first, jIt->first.second, jIt->second);
+        //~ passiveElim_.set(jIt->first.second, jIt->first.first, jIt->second);
+    //~ }
+    // TODO where to store B ??? the last col of the HS_
 }
 
 void HSolveActive::advanceCalcium()

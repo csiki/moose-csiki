@@ -10,6 +10,8 @@
 #ifndef _FAST_MX_ELIM_H
 #define _FAST_MX_ELIM_H
 
+const int EMPTY_VOXEL = -1;
+
 class FastMatrixElim: public SparseMatrix< double >
 {
 	public:

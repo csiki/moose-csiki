@@ -15,9 +15,25 @@
 using namespace moose; // For moose::Compartment from 'Compartment.h'
 #include "HSolveUtils.h"
 #include "HSolveStruct.h"
-#include "HinesMatrix.h"
+#include "../basecode/SparseMatrix.h"
+#include "../diffusion/FastMatrixElim.h"
+#include <map>
+#include <set>
+#include <algorithm> // std::set_intersection, std::find
+#include <iterator> // std::inserter, std::advance
 
-class HSolvePassive: public HinesMatrix
+struct TreeNodeStruct
+{
+    set< unsigned int > children;	///< Hines indices of child compts
+    // a set would be more
+    double Ra;
+    double Rm;
+    double Cm;
+    double Em;
+    double initVm;
+};
+
+class HSolvePassive
 {
 #ifdef DO_UNIT_TESTS
 	friend void testHSolvePassive();
@@ -30,9 +46,40 @@ public:
 protected:
 	// Integration
 	void updateMatrix();
-	void forwardEliminate();
-	void backwardSubstitute();
-	
+    
+    /**
+     * Diagonal values of the Hines matrix. Needed to be saved separately
+     * from the matrix, to initialise the matrix at every step.
+     * Ordered according to Hines numbering.
+     */
+    vector< double > diagvals_;
+    
+    /**
+     * Offdiagonal values of the Hines matrix. Needed to be saved separately
+     * from the matrix, to initialise the matrix at every step.
+     * The key of the map indicates the row and col of the matrix (Hines indices),
+     * respectively. It's not redundant so there's no entry for (1,2)
+     * and (2,1) connections. The value of the map is Gij = Gi * Gj / Gsum
+     * taking into consideration junctions more than 2 compartments.
+     */
+    map< pair< unsigned int, unsigned int >, double > junctions_;
+    
+    /**
+     * FastMatrixElim attributes
+    */
+    FastMatrixElim passiveElim_; // TODO is this needed?
+    vector< Triplet<double> > passiveOps_;
+    vector< double > passiveDiagVal_;
+    vector< unsigned int > parents_;
+    
+    /**
+     * Attributes from HinesMatrix. TODO !!!
+    */
+    unsigned int              nCompt_;
+    vector< double >          VMid_;    ///< Compartment voltage at the
+    ///< middle of a time step.
+    double                    dt_;
+    
 	vector< CompartmentStruct >       compartment_;
 	vector< Id >                      compartmentId_;
 	vector< double >                  V_;				/**< Compartment Vm.
@@ -47,6 +94,10 @@ protected:
 		* them. */
 	
 private:
+    
+    // originally in HinesMx - TODO
+    void prepareSparseMatrix();
+    
 	// Setting up of data structures
 	void clear();
 	void walkTree( Id seed );

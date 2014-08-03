@@ -9,8 +9,6 @@
 
 #include "HSolvePassive.h"
 
-extern ostream& operator <<( ostream& s, const HinesMatrix& m );
-
 void HSolvePassive::setup( Id seed, double dt )
 {
     clear();
@@ -18,14 +16,13 @@ void HSolvePassive::setup( Id seed, double dt )
     walkTree( seed );
     initialize();
     storeTree();
-    HinesMatrix::setup( tree_, dt_ );
+    prepareSparseMatrix();
 }
 
 void HSolvePassive::solve()
 {
     updateMatrix();
-    forwardEliminate();
-    backwardSubstitute();
+    FastMatrixElim::advance(V_, passiveOps_, passiveDiagVal_);
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -40,6 +37,8 @@ void HSolvePassive::clear()
     V_.clear();
     tree_.clear();
     inject_.clear();
+    junctions_.clear();
+    diagvals_.clear();
 }
 
 void HSolvePassive::walkTree( Id seed )
@@ -192,7 +191,7 @@ void HSolvePassive::storeTree()
         TreeNodeStruct node;
         // Push hines' indices of children
         for ( child = childId.begin(); child != childId.end(); ++child )
-            node.children.push_back( hinesIndex[ *child ] );
+            node.children.insert( hinesIndex[ *child ] );
 
         node.Ra = Ra;
         node.Rm = Rm;
@@ -204,201 +203,125 @@ void HSolvePassive::storeTree()
     }
 }
 
+/**
+ * Fills diagvals_ and junctions_ the const values that remains the same
+ * for every step, including the diagonal and off-diagonal values,
+ * respectively.
+*/
+void HSolvePassive::prepareSparseMatrix()
+{
+    /// calc diag values
+    diagvals_.resize(nCompt_, .0);
+    for ( unsigned int i = 0; i < nCompt_; ++i )
+        diagvals_[i] = tree_[ i ].Cm / ( dt_ / 2.0 ) + 1.0 / tree_[ i ].Rm;
+
+    /// calc off diagonal values
+    // axial conductance
+    // Ga_ === 2.0 / tree_[ i ].Ra --> for later use, calc this only once
+    vector< double > Ga(nCompt_, .0);
+    for (unsigned int i = 0; i < nCompt_; ++i)
+        Ga[i] = 2.0 / tree_[i].Ra;
+
+    // fill junctions_ --> key is a pair of hines indexes of connected
+    // compartments; the value is the Gij = Gi * Gj / Gsum; Gsum is the 
+    // summed value of conductances of every compartment in the given junction.
+    // only the parent of the root node will be EMPTY_VOXEL at the end
+    //~ vector< unsigned int > parent(nCompt_, EMPTY_VOXEL);
+    parents_.resize(nCompt_, EMPTY_VOXEL);
+    for (unsigned int cIndex = 0; cIndex < nCompt_; ++cIndex)
+    {
+        // parent->children are saved in junctions_
+        if (!tree_[cIndex].children.empty())
+        {
+            // calculate Gsum
+            double Gsum = Ga[cIndex];
+            set< unsigned int >::iterator childIt;
+            for (childIt = tree_[cIndex].children.begin();
+                childIt != tree_[cIndex].children.end(); ++childIt)
+                Gsum += Ga[*childIt];
+            // fill junctions_ and parents_ vector
+            for (childIt = tree_[cIndex].children.begin();
+                childIt != tree_[cIndex].children.end(); ++childIt)
+            {
+                junctions_.insert( make_pair(
+                    pair< unsigned int, unsigned int >(cIndex, *childIt),
+                    Ga[cIndex] * Ga[*childIt] / Gsum) );
+                // calc parents_ vector indexed by the child's Hines number,
+                // contains the Hines number of the parent
+                parents_[*childIt] = cIndex;
+            }
+        }
+    }
+    
+    // build sparse matrix
+    passiveElim_.setSize(nCompt_, nCompt_);
+    for (unsigned int i = 0; i < nCompt_; ++i)
+        passiveElim_.set(i, i, diagvals_[i]);
+    // store Gij off-diagonal values into sparse matrix
+    map< pair< unsigned int, unsigned int >, double >::iterator jIt;
+    for (jIt = junctions_.begin(); jIt != junctions_.end(); ++jIt)
+    {
+        passiveElim_.set(jIt->first.first, jIt->first.second, jIt->second);
+        passiveElim_.set(jIt->first.second, jIt->first.first, jIt->second);
+    }
+    
+    // build Gauss elimination operations
+    vector< unsigned int > diagIndex, lookupOldRowFromNew;
+    passiveElim_.hinesReorder(parents_, lookupOldRowFromNew);
+    passiveElim_.buildForwardElim(diagIndex, passiveOps_);
+    passiveElim_.buildBackwardSub(diagIndex, passiveOps_, passiveDiagVal_);
+    passiveElim_.opsReorder(lookupOldRowFromNew, passiveOps_, passiveDiagVal_);
+    
+    // TODO not sure if that's enough considering the axial conductances
+    // or at least the const values that only needed calc once
+    
+}
+
+
 //////////////////////////////////////////////////////////////////////
 // Numerical integration.
 //////////////////////////////////////////////////////////////////////
 
 void HSolvePassive::updateMatrix()
 {
+    
+    // TODO is it needed?
+    
     /*
      * Copy contents of HJCopy_ into HJ_. Cannot do a vector assign() because
      * iterators to HJ_ get invalidated in MS VC++
      */
-    if ( HJ_.size() != 0 )
-        memcpy( &HJ_[ 0 ], &HJCopy_[ 0 ], sizeof( double ) * HJ_.size() );
 
-    vector< double >::iterator ihs = HS_.begin();
-    vector< double >::iterator iv  = V_.begin();
-
-    vector< CompartmentStruct >::iterator ic;
-    for ( ic = compartment_.begin(); ic != compartment_.end(); ++ic )
-    {
-        *ihs         = *( 2 + ihs );
-        *( 3 + ihs ) = *iv * ic->CmByDt + ic->EmByRm;
-
-        ihs += 4, ++iv;
-    }
-
-    map< unsigned int, InjectStruct >::iterator inject;
-    for ( inject = inject_.begin(); inject != inject_.end(); inject++ )
-    {
-        unsigned int ic = inject->first;
-        InjectStruct& value = inject->second;
-
-        HS_[ 4 * ic + 3 ] += value.injectVarying + value.injectBasal;
-
-        value.injectVarying = 0.0;
-    }
-
-    stage_ = 0;    // Update done.
+    //~ if ( HJ_.size() != 0 )
+        //~ memcpy( &HJ_[ 0 ], &HJCopy_[ 0 ], sizeof( double ) * HJ_.size() );
+//~ 
+    //~ vector< double >::iterator ihs = HS_.begin();
+    //~ vector< double >::iterator iv  = V_.begin();
+//~ 
+    //~ vector< CompartmentStruct >::iterator ic;
+    //~ for ( ic = compartment_.begin(); ic != compartment_.end(); ++ic, ++iv )
+    //~ {
+        //~ *ihs         = *( 2 + ihs );
+        //~ *( 3 + ihs ) = *iv * ic->CmByDt + ic->EmByRm;
+//~ 
+        //~ ihs += 4;
+    //~ }
+    //~ 
+    //~ // injected to the last column
+    //~ map< unsigned int, InjectStruct >::iterator inject;
+    //~ for ( inject = inject_.begin(); inject != inject_.end(); inject++ )
+    //~ {
+        //~ unsigned int ic = inject->first;
+        //~ InjectStruct& value = inject->second;
+//~ 
+        //~ HS_[ 4 * ic + 3 ] += value.injectVarying + value.injectBasal;
+//~ 
+        //~ value.injectVarying = 0.0;
+    //~ }
+//~ 
+    //~ stage_ = 0;    // Update done.
 }
 
-void HSolvePassive::forwardEliminate()
-{
-    unsigned int ic = 0;
-    vector< double >::iterator ihs = HS_.begin();
-    vector< vdIterator >::iterator iop = operand_.begin();
-    vector< JunctionStruct >::iterator junction;
-
-    double pivot;
-    double division;
-    unsigned int index;
-    unsigned int rank;
-    for ( junction = junction_.begin();
-            junction != junction_.end();
-            junction++ )
-    {
-        index = junction->index;
-        rank = junction->rank;
-
-        while ( ic < index )
-        {
-            *( ihs + 4 ) -= *( ihs + 1 ) / *ihs **( ihs + 1 );
-            *( ihs + 7 ) -= *( ihs + 1 ) / *ihs **( ihs + 3 );
-
-            ++ic, ihs += 4;
-        }
-
-        pivot = *ihs;
-        if ( rank == 1 )
-        {
-            vdIterator j = *iop;
-            vdIterator s = *( iop + 1 );
-
-            division    = *( j + 1 ) / pivot;
-            *( s )     -= division **j;
-            *( s + 3 ) -= division **( ihs + 3 );
-
-            iop += 3;
-        }
-        else if ( rank == 2 )
-        {
-            vdIterator j = *iop;
-            vdIterator s;
-
-            s           = *( iop + 1 );
-            division    = *( j + 1 ) / pivot;
-            *( s )     -= division **j;
-            *( j + 4 ) -= division **( j + 2 );
-            *( s + 3 ) -= division **( ihs + 3 );
-
-            s           = *( iop + 3 );
-            division    = *( j + 3 ) / pivot;
-            *( j + 5 ) -= division **j;
-            *( s )     -= division **( j + 2 );
-            *( s + 3 ) -= division **( ihs + 3 );
-
-            iop += 5;
-        }
-        else
-        {
-            vector< vdIterator >::iterator
-            end = iop + 3 * rank * ( rank + 1 );
-            for ( ; iop < end; iop += 3 )
-                **iop -= **( iop + 2 ) / pivot ***( iop + 1 );
-        }
-
-        ++ic, ihs += 4;
-    }
-
-    while ( ic < nCompt_ - 1 )
-    {
-        *( ihs + 4 ) -= *( ihs + 1 ) / *ihs **( ihs + 1 );
-        *( ihs + 7 ) -= *( ihs + 1 ) / *ihs **( ihs + 3 );
-
-        ++ic, ihs += 4;
-    }
-
-    stage_ = 1;    // Forward elimination done.
-}
-
-void HSolvePassive::backwardSubstitute()
-{
-    int ic = nCompt_ - 1;
-    vector< double >::reverse_iterator ivmid = VMid_.rbegin();
-    vector< double >::reverse_iterator iv = V_.rbegin();
-    vector< double >::reverse_iterator ihs = HS_.rbegin();
-    vector< vdIterator >::reverse_iterator iop = operand_.rbegin();
-    vector< vdIterator >::reverse_iterator ibop = backOperand_.rbegin();
-    vector< JunctionStruct >::reverse_iterator junction;
-
-    *ivmid = *ihs / *( ihs + 3 );
-    *iv = 2 * *ivmid - *iv;
-    --ic, ++ivmid, ++iv, ihs += 4;
-
-    int index;
-    int rank;
-    for ( junction = junction_.rbegin();
-            junction != junction_.rend();
-            junction++ )
-    {
-        index = junction->index;
-        rank = junction->rank;
-
-        while ( ic > index )
-        {
-            *ivmid = ( *ihs - *( ihs + 2 ) **( ivmid - 1 ) ) / *( ihs + 3 );
-            *iv = 2 * *ivmid - *iv;
-
-            --ic, ++ivmid, ++iv, ihs += 4;
-        }
-
-        if ( rank == 1 )
-        {
-            *ivmid = ( *ihs - **iop ***( iop + 2 ) ) / *( ihs + 3 );
-
-            iop += 3;
-        }
-        else if ( rank == 2 )
-        {
-            vdIterator v0 = *( iop );
-            vdIterator v1 = *( iop + 2 );
-            vdIterator j  = *( iop + 4 );
-
-            *ivmid = ( *ihs
-                       - *v0 **( j + 2 )
-                       - *v1 **j
-                     ) / *( ihs + 3 );
-
-            iop += 5;
-        }
-        else
-        {
-            *ivmid = *ihs;
-            for ( int i = 0; i < rank; ++i )
-            {
-                *ivmid -= **ibop ***( ibop + 1 );
-                ibop += 2;
-            }
-            *ivmid /= *( ihs + 3 );
-
-            iop += 3 * rank * ( rank + 1 );
-        }
-
-        *iv = 2 * *ivmid - *iv;
-        --ic, ++ivmid, ++iv, ihs += 4;
-    }
-
-    while ( ic >= 0 )
-    {
-        *ivmid = ( *ihs - *( ihs + 2 ) **( ivmid - 1 ) ) / *( ihs + 3 );
-        *iv = 2 * *ivmid - *iv;
-
-        --ic, ++ivmid, ++iv, ihs += 4;
-    }
-
-    stage_ = 2;    // Backward substitution done.
-}
 
 ///////////////////////////////////////////////////////////////////////////
 // Public interface.

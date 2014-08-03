@@ -47,7 +47,7 @@ void testSorting();
 //	static unsigned int parents[] = { 1,6,3,6,5,8,7,8,9,10,-1};
 //	unsigned int numKids[] = {0,1,0,1,0,2,
 
-static const unsigned int EMPTY_VOXEL(-1);
+//static const unsigned int EMPTY_VOXEL(-1);
 
 bool FastMatrixElim::checkSymmetricShape() const
 {

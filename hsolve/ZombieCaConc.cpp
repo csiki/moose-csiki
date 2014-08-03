@@ -10,7 +10,6 @@
 #include "header.h"
 #include "../biophysics/CaConcBase.h"
 
-#include "HinesMatrix.h"
 #include "HSolveStruct.h"
 #include "HSolvePassive.h"
 #include "RateLookup.h"

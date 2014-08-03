@@ -16,7 +16,6 @@
 #include "../randnum/randnum.h"
 #include "../biophysics/CompartmentBase.h"
 #include "../biophysics/Compartment.h"
-#include "HinesMatrix.h"
 #include "HSolveStruct.h"
 #include "HSolvePassive.h"
 #include "RateLookup.h"

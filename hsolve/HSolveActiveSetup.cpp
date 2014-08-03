@@ -16,15 +16,10 @@
 
 void HSolveActive::setup( Id seed, double dt )
 {
-    cout << "#0asetup";
     HSolvePassive::setup(seed, dt);
-    cout << "#1asetup";
     readHHChannels();
-    cout << "#2asetup";
     readGates();
-    cout << "#3asetup";
     readCalcium();
-    cout << "#4asetup";
     createLookupTables();
     readSynapses(); // Reads SynChans, SpikeGens. Drops process msg for SpikeGens.
     readExternalChannels();

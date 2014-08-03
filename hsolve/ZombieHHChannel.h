@@ -31,7 +31,6 @@
 
 #include "header.h"
 #include "ElementValueFinfo.h"
-#include "HinesMatrix.h"
 #include "HSolveStruct.h"
 #include "HSolvePassive.h"
 #include "RateLookup.h"
